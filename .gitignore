@@ -1,0 +1,9 @@
+node_modules/
+*.log
+*.vsix
+.DS_Store
+Thumbs.db
+
+# личные файлы памяти/инструкций — не публикуем
+MEMORY.md
+CLAUDE.md

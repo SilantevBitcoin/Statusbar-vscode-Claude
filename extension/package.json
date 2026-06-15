@@ -1,0 +1,28 @@
+{
+  "name": "claude-ctx-hud",
+  "displayName": "Claude Context HUD",
+  "description": "Контекст, модель, effort и лимиты Claude Code в нижней полосе VS Code",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": { "vscode": "^1.98.0" },
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "configuration": {
+      "title": "Claude Context HUD",
+      "properties": {
+        "claudeCtxHud.padLeft": {
+          "type": "number",
+          "default": 50,
+          "minimum": 0,
+          "description": "Число ведущих отступов — сдвигает индикатор вправо (приблизительное центрирование). Крути под ширину своего окна."
+        },
+        "claudeCtxHud.ultracode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Ты сейчас в Ultracode (xhigh + workflows)? При true effort показывается EH+W вместо EH. Авто-детект невозможен (флаг ultracode не пишется в файлы) — ставь вручную при /effort ultracode."
+        }
+      }
+    }
+  }
+}
