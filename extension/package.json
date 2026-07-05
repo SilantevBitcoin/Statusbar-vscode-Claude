@@ -2,7 +2,7 @@
   "name": "claude-ctx-hud",
   "displayName": "Claude Context HUD",
   "description": "Контекст, модель, effort и лимиты Claude Code в нижней полосе VS Code",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "local",
   "engines": { "vscode": "^1.98.0" },
   "main": "./extension.js",

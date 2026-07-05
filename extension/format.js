@@ -5,12 +5,13 @@ function fmtK(n) {
   return Math.round((Number(n) || 0) / 1000) + 'k'
 }
 
-// claude-opus-4-8 → "Opus 4.8"; иначе берём display_name как есть.
+// claude-opus-4-8 → "Opus 4.8"; claude-fable-5 → "Fable 5" (минор опционален);
+// иначе берём display_name как есть.
 function modelName(model) {
   const id = (model && model.id) || ''
   const disp = (model && model.display_name) || ''
-  const m = id.match(/(opus|sonnet|haiku)-(\d+)-(\d+)/i)
-  if (m) return m[1][0].toUpperCase() + m[1].slice(1) + ' ' + m[2] + '.' + m[3]
+  const m = id.match(/(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?/i)
+  if (m) return m[1][0].toUpperCase() + m[1].slice(1) + ' ' + m[2] + (m[3] ? '.' + m[3] : '')
   return disp || id || '?'
 }
 
@@ -28,13 +29,15 @@ function effortAbbr(effort, ultracode) {
   }
 }
 
-// unix epoch seconds → "2h12" или "45m"
+// unix epoch seconds → "5d3h" (для 7d) / "2h12" / "45m". Дни — когда до сброса > суток.
 function timeLeft(resetsAt) {
   if (!resetsAt) return ''
   const diff = Number(resetsAt) - Math.floor(Date.now() / 1000)
   if (diff <= 0) return '0m'
-  const h = Math.floor(diff / 3600)
+  const d = Math.floor(diff / 86400)
+  const h = Math.floor((diff % 86400) / 3600)
   const m = Math.floor((diff % 3600) / 60)
+  if (d > 0) return d + 'd' + (h > 0 ? h + 'h' : '')
   return h > 0 ? h + 'h' + String(m).padStart(2, '0') : m + 'm'
 }
 
@@ -59,7 +62,8 @@ function buildLine(d, ultracode) {
     parts.push('5h ' + Math.round(fh.used_percentage) + '%' + (reset ? ' ' + reset : ''))
   }
   if (sd.used_percentage != null) {
-    parts.push('7d ' + Math.round(sd.used_percentage) + '%')
+    const reset = timeLeft(sd.resets_at)
+    parts.push('7d ' + Math.round(sd.used_percentage) + '%' + (reset ? ' ' + reset : ''))
   }
   return parts.filter(Boolean).join(' | ')
 }

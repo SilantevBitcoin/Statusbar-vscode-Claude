@@ -18,9 +18,18 @@ function readSettings() {
   }
 }
 
-// Окно контекста: модель с флагом 1m → 1M токенов, иначе 200k.
-function ctxWindow(model) {
-  return /1m|\[1m\]/i.test(model || '') ? 1000000 : 200000
+// Окно контекста ДЛЯ СЕССИИ. Флаг [1m] в settings.model относится только к своей
+// модели: сессия может идти на другой (выбор /model session-only, в settings не
+// пишется) — тогда чужой флаг не применяем. Fable/Mythos: 1M всегда (дефолт API).
+function ctxWindow(settingsModel, sessionModelId) {
+  const m = String(settingsModel || '')
+  const id = String(sessionModelId || '')
+  if (/fable|mythos/i.test(id)) return 1000000
+  const has1m = /1m|\[1m\]/i.test(m)
+  if (!id) return has1m ? 1000000 : 200000 // модель сессии неизвестна → по settings
+  const base = m.replace(/\[1m\]/gi, '').trim().toLowerCase()
+  if (has1m && base && id.toLowerCase().includes(base)) return 1000000
+  return 200000
 }
 
 // Нормализация пути для сравнения cwd: нижний регистр, слеши → бэкслеши.
@@ -66,47 +75,89 @@ function listJsonl() {
   return out
 }
 
-// Из хвоста файла (~128 КБ) тянем последний реальный usage И заголовок чата (aiTitle).
-// aiTitle = имя вкладки Claude (= tab.label) → связь вкладка↔сессия; оно дублируется
-// почти в каждой записи, поэтому есть в хвосте даже у многомегабайтных файлов.
-// Возвращает { tokens, modelId, cwd, title }.
+// Из хвоста файла тянем последний реальный usage И заголовок чата (aiTitle).
+// Окно адаптивное 128К → 512К → 2М: одна запись бывает >128К (tool result с
+// картинкой/base64 до ~1.7 МБ в реальных сессиях) — тогда в базовом окне нет ни
+// одного целого JSON и сессия «пропадала». Возвращает { tokens, modelId, cwd, title }.
+const TAIL_SPANS = [131072, 524288, 2097152]
 function readUsage(file) {
+  for (const span of TAIL_SPANS) {
+    let buf
+    let size
+    try {
+      const fd = fs.openSync(file, 'r')
+      size = fs.fstatSync(fd).size
+      const len = Math.min(size, span)
+      buf = Buffer.alloc(len)
+      fs.readSync(fd, buf, 0, len, size - len)
+      fs.closeSync(fd)
+    } catch (_) {
+      return null
+    }
+    const lines = buf.toString('utf8').split('\n')
+    let usage = null
+    let title = null
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const e = JSON.parse(lines[i])
+        if (!title && e.aiTitle) title = e.aiTitle
+        if (!usage) {
+          const u = e.message && e.message.usage
+          // <synthetic> — служебные записи (model "<synthetic>", контекст 0): пропускаем.
+          if (u && e.message.model !== '<synthetic>') {
+            usage = {
+              tokens:
+                (u.input_tokens || 0) +
+                (u.cache_creation_input_tokens || 0) +
+                (u.cache_read_input_tokens || 0),
+              modelId: e.message.model,
+              cwd: e.cwd || '',
+            }
+          }
+        }
+        if (usage && title) break
+      } catch (_) {}
+    }
+    if (usage) return { ...usage, title }
+    if (size <= span) return null // прочитали весь файл — usage там нет
+  }
+  return null
+}
+
+// Заголовок из ГОЛОВЫ файла (первые 512К): у части сессий ai-title пишется один раз
+// в начале (строки ~14-18) и в хвост никогда не попадает — без этого их вкладки не
+// матчились. Берём ПОСЛЕДНЮЮ ai-title запись головы. Кэш: голова append-only файла
+// не меняется → найденный title вечен; null перечитываем только пока файл дорастает
+// до полного окна головы.
+const HEAD_SPAN = 524288
+const _titleCache = new Map()
+function readTitleHead(file) {
+  const c = _titleCache.get(file)
+  if (c && (c.title !== null || c.scanned >= HEAD_SPAN)) return c.title
   let buf
+  let scanned
   try {
     const fd = fs.openSync(file, 'r')
     const size = fs.fstatSync(fd).size
-    const len = Math.min(size, 131072)
-    buf = Buffer.alloc(len)
-    fs.readSync(fd, buf, 0, len, size - len)
+    if (c && c.title === null && size <= c.scanned) return null // не выросло — не перечитываем
+    scanned = Math.min(size, HEAD_SPAN)
+    buf = Buffer.alloc(scanned)
+    fs.readSync(fd, buf, 0, scanned, 0)
     fs.closeSync(fd)
   } catch (_) {
     return null
   }
   const lines = buf.toString('utf8').split('\n')
-  let usage = null
   let title = null
-  for (let i = lines.length - 1; i >= 0; i--) {
+  for (const ln of lines) {
+    if (!ln.includes('aiTitle')) continue
     try {
-      const e = JSON.parse(lines[i])
-      if (!title && e.aiTitle) title = e.aiTitle
-      if (!usage) {
-        const u = e.message && e.message.usage
-        // <synthetic> — служебные записи (model "<synthetic>", контекст 0): пропускаем.
-        if (u && e.message.model !== '<synthetic>') {
-          usage = {
-            tokens:
-              (u.input_tokens || 0) +
-              (u.cache_creation_input_tokens || 0) +
-              (u.cache_read_input_tokens || 0),
-            modelId: e.message.model,
-            cwd: e.cwd || '',
-          }
-        }
-      }
-      if (usage && title) break
+      const e = JSON.parse(ln)
+      if (e.aiTitle) title = e.aiTitle // последняя в голове — самая свежая
     } catch (_) {}
   }
-  return usage ? { ...usage, title } : null
+  _titleCache.set(file, { scanned, title })
+  return title
 }
 
 // cwd → имя папки projects (как у Claude Code): не-буквенно-цифровое → '-'.
@@ -159,7 +210,11 @@ function listProjectSessions(workspacePath) {
         continue
       }
       const r = readUsageCached(fp, mtime)
-      if (r && belongs(r.cwd, want)) out.push({ fp, mtime, tokens: r.tokens, modelId: r.modelId, title: r.title })
+      if (r && belongs(r.cwd, want)) {
+        // title из хвоста (свежайший) приоритетнее; нет в хвосте → ищем в голове файла
+        const title = r.title || readTitleHead(fp)
+        out.push({ fp, mtime, tokens: r.tokens, modelId: r.modelId, title })
+      }
     }
   }
   return out.sort((a, b) => b.mtime - a.mtime)
@@ -198,7 +253,7 @@ function subagentActivity(sessionFile, nowMs) {
 // subagents считаем здесь (дёшево); rate_limits подмешивает extension (usage.js).
 function composeLine(session) {
   const s = readSettings()
-  const win = ctxWindow(s.model)
+  const win = ctxWindow(s.model, session && session.modelId)
   if (!session) {
     return {
       sessionFile: null,
@@ -224,5 +279,5 @@ function composeLine(session) {
 
 module.exports = {
   readSettings, ctxWindow, normPath, belongs, munge, listJsonl, readUsage,
-  subagentActivity, listProjectSessions, composeLine,
+  readTitleHead, subagentActivity, listProjectSessions, composeLine,
 }

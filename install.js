@@ -7,7 +7,7 @@ const os = require('os')
 const path = require('path')
 
 const EXT_ID = 'local.claude-ctx-hud'
-const VERSION = '0.0.1'
+const VERSION = '0.0.2'
 const DIRNAME = `${EXT_ID}-${VERSION}`
 
 const src = path.join(__dirname, 'extension')
