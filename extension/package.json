@@ -2,7 +2,7 @@
   "name": "claude-ctx-hud",
   "displayName": "Claude Context HUD",
   "description": "Live status-bar HUD for Claude Code: per-tab context %, model, effort, workflow activity and 5h/7d subscription limits.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "SilantevBitcoin",
   "license": "MIT",
   "icon": "icon.png",

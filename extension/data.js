@@ -183,7 +183,7 @@ function readUsageCached(fp, mtime) {
 function listProjectSessions(workspacePath) {
   const want = normPath(workspacePath)
   if (!want) return []
-  const tag = munge(workspacePath)
+  const tag = munge(workspacePath).toLowerCase()
   const out = []
   let projs
   try {
@@ -192,7 +192,11 @@ function listProjectSessions(workspacePath) {
     return out
   }
   for (const p of projs) {
-    if (p !== tag && !p.startsWith(tag + '-')) continue // быстрый отсев по имени папки
+    // Регистронезависимый отсев по имени папки: VS Code отдаёт путь как `d:\…`, а
+    // Claude мог создать папку из `D:\…` (`D--AI-Base` vs тег `d--AI-Base`). Пути на
+    // Windows регистронезависимы — сравниваем так же, как normPath/belongs (lowercase).
+    const pl = p.toLowerCase()
+    if (pl !== tag && !pl.startsWith(tag + '-')) continue // быстрый отсев по имени папки
     const pdir = path.join(PROJECTS, p)
     let files
     try {

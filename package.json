@@ -1,6 +1,6 @@
 {
   "name": "claude-ctx-hud",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "VS Code status bar HUD for Claude Code: per-tab context, model, effort, workflow activity and 5h/7d limits",
   "bin": {
     "claude-ctx-hud": "install.js"
