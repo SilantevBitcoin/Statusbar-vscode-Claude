@@ -6,8 +6,8 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 
-const EXT_ID = 'local.claude-ctx-hud'
-const VERSION = '0.0.2'
+const EXT_ID = 'SilantevBitcoin.claude-ctx-hud'
+const VERSION = '0.1.0'
 const DIRNAME = `${EXT_ID}-${VERSION}`
 
 const src = path.join(__dirname, 'extension')

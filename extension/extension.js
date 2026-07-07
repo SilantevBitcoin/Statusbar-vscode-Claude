@@ -68,7 +68,8 @@ function activate(context) {
     try {
       const cfg = vscode.workspace.getConfiguration('claudeCtxHud')
       const pad = cfg.get('padLeft', 0)
-      const ultracode = cfg.get('ultracode', false)
+      const showLimits = cfg.get('showLimits', true)
+      const showWorkflow = cfg.get('showWorkflow', true)
       const lead = NBSP.repeat(Math.max(0, pad))
 
       const t = claudeTabTitle()
@@ -86,7 +87,7 @@ function activate(context) {
         return
       }
       if (lastUsage) d.rate_limits = lastUsage
-      item.text = lead + buildLine(d, ultracode)
+      item.text = lead + buildLine(d, { showLimits, showWorkflow })
       item.tooltip = (chosen.title || 'сессия') + '\n(контекст активной вкладки Claude)'
     } catch (_) {
       item.text = 'ctx —'

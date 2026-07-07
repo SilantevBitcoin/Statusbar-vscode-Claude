@@ -1,5 +1,9 @@
 # Claude Context HUD
 
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/SilantevBitcoin.claude-ctx-hud?label=VS%20Code%20Marketplace&color=1e1e1e)](https://marketplace.visualstudio.com/items?itemName=SilantevBitcoin.claude-ctx-hud)
+[![Open VSX](https://img.shields.io/open-vsx/v/SilantevBitcoin/claude-ctx-hud?label=Open%20VSX&color=D97757)](https://open-vsx.org/extension/SilantevBitcoin/claude-ctx-hud)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 Лёгкое VS Code-расширение, которое показывает в нижней статус-полосе живую сводку по **активной
 вкладке-чату Claude Code**: сколько занято контекста, какая модель и effort, идёт ли сейчас
 оркестрация суб-агентов и сколько осталось от лимитов подписки (5 часов / 7 дней).
@@ -21,13 +25,13 @@
 |---|---|---|
 | Контекст | `516k 52%` | токенов в контексте активного чата и % от окна **модели этой сессии** (200k; 1M для Fable/Mythos и `[1m]`-моделей Opus/Sonnet) |
 | Модель | `Opus 4.8` | модель текущего ответа (`claude-opus-4-8` → `Opus 4.8`, `claude-fable-5` → `Fable 5`) |
-| Effort | `MAX` | уровень reasoning: `L · MD · H · EH · MAX` (`EH+W` — ultracode, см. ниже) |
+| Effort | `MAX` | уровень reasoning: `L · MD · H · EH · MAX` |
 | Workflow | `⚙2` | активных суб-агентов прямо сейчас (есть только во время оркестрации) |
 | Лимит 5ч | `5h 54% 14m` | израсходовано сессионного лимита + время до сброса |
 | Лимит 7д | `7d 62%` | израсходовано недельного лимита |
 
 `⚙` и сегменты лимитов появляются только когда есть данные: нет суб-агентов — нет `⚙`; не получены
-лимиты — строка просто без них.
+лимиты — строка просто без них. Сегменты `⚙` и лимитов можно отключить в настройках.
 
 ---
 
@@ -51,7 +55,22 @@
 
 ## Установка
 
-### Быстро — через npx
+### Из магазина (рекомендуется)
+
+**VS Code Marketplace** — в VS Code открой панель Extensions (`Ctrl/Cmd+Shift+X`), найди
+**«Claude Context HUD»** и нажми Install. Или из терминала:
+
+```bash
+code --install-extension SilantevBitcoin.claude-ctx-hud
+```
+
+**Open VSX** (Cursor / VSCodium / Windsurf) — найди **«Claude Context HUD»** во встроенном менеджере
+расширений, либо скачай `.vsix` со [страницы Open VSX](https://open-vsx.org/extension/SilantevBitcoin/claude-ctx-hud)
+и поставь через `Extensions: Install from VSIX…`.
+
+После установки индикатор появляется в нижней статус-полосе автоматически.
+
+### Из исходников — через npx
 
 ```bash
 npx github:SilantevBitcoin/Statusbar-vscode-Claude
@@ -60,11 +79,11 @@ npx github:SilantevBitcoin/Statusbar-vscode-Claude
 Скрипт скопирует расширение в `~/.vscode/extensions/` и зарегистрирует его. После этого:
 **`Ctrl/Cmd+Shift+P` → `Developer: Reload Window`**.
 
-### Вручную
+### Из исходников — вручную
 
 ```bash
 git clone https://github.com/SilantevBitcoin/Statusbar-vscode-Claude
-cd claude-ctx-hud
+cd Statusbar-vscode-Claude
 node install.js
 ```
 
@@ -73,19 +92,21 @@ node install.js
 
 ### Удаление
 
-Удали папку `~/.vscode/extensions/local.claude-ctx-hud-0.0.2/` и запись `local.claude-ctx-hud` из
-`~/.vscode/extensions/extensions.json`, затем перезагрузи окно.
+Из магазина — обычным Uninstall в панели Extensions. При ручной установке удали папку
+`~/.vscode/extensions/SilantevBitcoin.claude-ctx-hud-*/` (или `local.claude-ctx-hud-*/`) и соответствующую
+запись из `~/.vscode/extensions/extensions.json`, затем перезагрузи окно.
 
 ---
 
 ## Настройки
 
-В `settings.json` VS Code:
+В `settings.json` VS Code (или в UI: Settings → Extensions → Claude Context HUD):
 
 | Настройка | По умолчанию | Описание |
 |---|---|---|
 | `claudeCtxHud.padLeft` | `50` | ведущие неразрывные пробелы — сдвиг вправо для псевдо-центрирования (VS Code не умеет центр в статус-баре). Подбирается под ширину окна |
-| `claudeCtxHud.ultracode` | `false` | если ты в ultracode-режиме (`xhigh` + workflows) — показывать `EH+W` вместо `EH`. Авто-детект невозможен (флаг session-only, в файлы не пишется) |
+| `claudeCtxHud.showLimits` | `true` | показывать сегменты лимитов подписки `5h` / `7d` |
+| `claudeCtxHud.showWorkflow` | `true` | показывать индикатор активных суб-агентов `⚙N` |
 
 ---
 
@@ -101,7 +122,7 @@ node install.js
 Логику без VS Code можно гонять напрямую:
 
 ```bash
-node -e 'const {buildLine}=require("./extension/format"); console.log(buildLine({context_window:{total_input_tokens:45000,used_percentage:23},model:{id:"claude-opus-4-8"},effort:{level:"xhigh"},subagents:2},false))'
+node -e 'const {buildLine}=require("./extension/format"); console.log(buildLine({context_window:{total_input_tokens:45000,used_percentage:23},model:{id:"claude-opus-4-8"},effort:{level:"xhigh"},subagents:2}))'
 ```
 
 Цикл правки: меняешь `extension/*` → переустанавливаешь (`node install.js`) или копируешь файлы в рабочую
@@ -121,6 +142,16 @@ node -e 'const {buildLine}=require("./extension/format"); console.log(buildLine(
 ---
 
 ## История версий
+
+### 0.1.0
+
+Первый публичный релиз в VS Code Marketplace и Open VSX.
+
+- Иконка расширения.
+- Убран рудиментарный ручной тумблер `ultracode` (`EH+W`): активность оркестрации и так видна
+  автоматически через `⚙N`, отдельный флаг был не нужен.
+- Новые настройки `claudeCtxHud.showLimits` и `claudeCtxHud.showWorkflow` — можно скрыть сегменты
+  лимитов и индикатор `⚙`.
 
 ### 0.0.2
 

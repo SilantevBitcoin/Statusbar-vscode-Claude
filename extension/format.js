@@ -15,15 +15,14 @@ function modelName(model) {
   return disp || id || '?'
 }
 
-// effort.level: low/medium/high/xhigh/max. ultracode (xhigh+workflows) из файлов НЕ отличим
-// от обычного xhigh — флаг приходит вторым аргументом из ручной настройки claudeCtxHud.ultracode.
-function effortAbbr(effort, ultracode) {
+// effort.level: low/medium/high/xhigh/max → L/MD/H/EH/MAX.
+function effortAbbr(effort) {
   const lvl = effort && effort.level
   switch (lvl) {
     case 'low': return 'L'
     case 'medium': return 'MD'
     case 'high': return 'H'
-    case 'xhigh': return ultracode ? 'EH+W' : 'EH'
+    case 'xhigh': return 'EH'
     case 'max': return 'MAX'
     default: return lvl ? String(lvl).toUpperCase() : ''
   }
@@ -41,9 +40,13 @@ function timeLeft(resetsAt) {
   return h > 0 ? h + 'h' + String(m).padStart(2, '0') : m + 'm'
 }
 
-// Распарсенный statusLine-JSON (+ флаг ultracode из настройки) → строка индикатора.
-function buildLine(d, ultracode) {
+// Распарсенный statusLine-JSON → строка индикатора. opts (из настроек расширения):
+// { showLimits, showWorkflow } — оба по умолчанию true (поведение как без opts).
+function buildLine(d, opts) {
   d = d || {}
+  opts = opts || {}
+  const showLimits = opts.showLimits !== false
+  const showWorkflow = opts.showWorkflow !== false
   const cw = d.context_window || {}
   const rl = d.rate_limits || {}
   const fh = rl.five_hour || {}
@@ -52,16 +55,16 @@ function buildLine(d, ultracode) {
   const parts = [
     fmtK(cw.total_input_tokens) + ' ' + Math.round(cw.used_percentage || 0) + '%',
     modelName(d.model),
-    effortAbbr(d.effort, ultracode),
+    effortAbbr(d.effort),
   ]
   // Workflow/Task-активность: ⚙N свежих суб-агентов (N≥2 — параллельная оркестрация).
   const sub = Number(d.subagents) || 0
-  if (sub > 0) parts.push('⚙' + sub)
-  if (fh.used_percentage != null) {
+  if (showWorkflow && sub > 0) parts.push('⚙' + sub)
+  if (showLimits && fh.used_percentage != null) {
     const reset = timeLeft(fh.resets_at)
     parts.push('5h ' + Math.round(fh.used_percentage) + '%' + (reset ? ' ' + reset : ''))
   }
-  if (sd.used_percentage != null) {
+  if (showLimits && sd.used_percentage != null) {
     const reset = timeLeft(sd.resets_at)
     parts.push('7d ' + Math.round(sd.used_percentage) + '%' + (reset ? ' ' + reset : ''))
   }

@@ -1,10 +1,18 @@
 {
   "name": "claude-ctx-hud",
   "displayName": "Claude Context HUD",
-  "description": "Контекст, модель, effort и лимиты Claude Code в нижней полосе VS Code",
-  "version": "0.0.2",
-  "publisher": "local",
+  "description": "Live status-bar HUD for Claude Code: per-tab context %, model, effort, workflow activity and 5h/7d subscription limits.",
+  "version": "0.1.0",
+  "publisher": "SilantevBitcoin",
+  "license": "MIT",
+  "icon": "icon.png",
   "engines": { "vscode": "^1.98.0" },
+  "repository": { "type": "git", "url": "https://github.com/SilantevBitcoin/Statusbar-vscode-Claude" },
+  "bugs": { "url": "https://github.com/SilantevBitcoin/Statusbar-vscode-Claude/issues" },
+  "homepage": "https://github.com/SilantevBitcoin/Statusbar-vscode-Claude#readme",
+  "categories": ["Other", "Visualization"],
+  "keywords": ["claude", "claude-code", "statusbar", "hud", "context", "tokens", "effort"],
+  "galleryBanner": { "color": "#1e1e1e", "theme": "dark" },
   "main": "./extension.js",
   "activationEvents": ["onStartupFinished"],
   "contributes": {
@@ -17,10 +25,15 @@
           "minimum": 0,
           "description": "Число ведущих отступов — сдвигает индикатор вправо (приблизительное центрирование). Крути под ширину своего окна."
         },
-        "claudeCtxHud.ultracode": {
+        "claudeCtxHud.showLimits": {
           "type": "boolean",
-          "default": false,
-          "description": "Ты сейчас в Ultracode (xhigh + workflows)? При true effort показывается EH+W вместо EH. Авто-детект невозможен (флаг ultracode не пишется в файлы) — ставь вручную при /effort ultracode."
+          "default": true,
+          "description": "Показывать сегменты лимитов подписки 5h / 7d в строке. Выключи, если не нужны."
+        },
+        "claudeCtxHud.showWorkflow": {
+          "type": "boolean",
+          "default": true,
+          "description": "Показывать индикатор активных суб-агентов ⚙N (оркестрация workflow / Task). Выключи, чтобы скрыть."
         }
       }
     }
