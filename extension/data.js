@@ -9,13 +9,19 @@ const HOME = os.homedir()
 const PROJECTS = path.join(HOME, '.claude', 'projects')
 const SETTINGS = path.join(HOME, '.claude', 'settings.json')
 
+// Кэш последнего ВАЛИДНОГО settings: Claude Code переписывает settings.json не атомарно
+// (бывает 0 байт при truncate до записи, наблюдалось 2026-07-10) — при пустом/битом файле
+// держим последнее известное model/effort, иначе окно контекста ложно падало на 200К и в
+// строке пропадал effort. Пустой валидный (нет полей) не затирает кэш нулём.
+let _lastSettings = { model: '', effortLevel: '' }
 function readSettings() {
   try {
     const s = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'))
-    return { model: s.model || '', effortLevel: s.effortLevel || '' }
+    if (s.model || s.effortLevel) _lastSettings = { model: s.model || '', effortLevel: s.effortLevel || '' }
   } catch (_) {
-    return { model: '', effortLevel: '' }
+    // битый/пустой JSON (транзиент перезаписи) — возвращаем последнее валидное
   }
+  return _lastSettings
 }
 
 // Окно контекста ДЛЯ СЕССИИ. Флаг [1m] в settings.model относится только к своей
@@ -97,10 +103,15 @@ function readUsage(file) {
     const lines = buf.toString('utf8').split('\n')
     let usage = null
     let title = null
+    let lastPrompt = null
     for (let i = lines.length - 1; i >= 0; i--) {
       try {
         const e = JSON.parse(lines[i])
         if (!title && e.aiTitle) title = e.aiTitle
+        // ПОСЛЕДНИЙ промпт из хвоста: в Claude Code 2.1.206 имя вкладки (tab.label) ==
+        // последнему промпту пользователя (ai-title больше не пишется, обновляется на
+        // каждое сообщение — см. Ремонт 2026-07-10). Берём ближайший к концу.
+        if (!lastPrompt && e.type === 'last-prompt' && e.lastPrompt) lastPrompt = String(e.lastPrompt)
         if (!usage) {
           const u = e.message && e.message.usage
           // <synthetic> — служебные записи (model "<synthetic>", контекст 0): пропускаем.
@@ -115,10 +126,10 @@ function readUsage(file) {
             }
           }
         }
-        if (usage && title) break
+        if (usage && lastPrompt) break // title (aiTitle) опционален: в 2.1.206 его нет
       } catch (_) {}
     }
-    if (usage) return { ...usage, title }
+    if (usage) return { ...usage, title, lastPrompt }
     if (size <= span) return null // прочитали весь файл — usage там нет
   }
   return null
@@ -215,9 +226,14 @@ function listProjectSessions(workspacePath) {
       }
       const r = readUsageCached(fp, mtime)
       if (r && belongs(r.cwd, want)) {
-        // title из хвоста (свежайший) приоритетнее; нет в хвосте → ищем в голове файла
-        const title = r.title || readTitleHead(fp)
-        out.push({ fp, mtime, tokens: r.tokens, modelId: r.modelId, title })
+        // aiTitle: хвост (свежайший) → голова (у части сессий пишется раз в начале).
+        // Имя вкладки == aiTitle (сессии ≤2.1.205) ЛИБО последний промпт (2.1.206+) —
+        // оба кладём в сессию, матчер вкладки (sessionForLabel) проверяет их вместе.
+        const aiTitle = r.title || readTitleHead(fp)
+        out.push({
+          fp, mtime, tokens: r.tokens, modelId: r.modelId,
+          title: aiTitle || r.lastPrompt, aiTitle, lastPrompt: r.lastPrompt,
+        })
       }
     }
   }

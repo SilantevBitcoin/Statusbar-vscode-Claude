@@ -53,14 +53,28 @@ function activate(context) {
     return null
   }
 
-  // Сессия по (возможно усечённому) заголовку вкладки: точное совпадение, иначе
+  // Сессия по (возможно усечённому) заголовку вкладки. Имя вкладки Claude может быть
+  // либо aiTitle (сессии ≤2.1.205), либо ПОСЛЕДНИМ промптом (2.1.206+ — обновляется на
+  // каждое сообщение) — проверяем оба кандидата. Точное совпадение приоритетнее, иначе
   // префиксный матч до многоточия. При коллизии — свежайшая (sessions отсортирован).
+  // Нормализация пробелов ОБЯЗАТЕЛЬНА: tab.label схлопывает повторные пробелы
+  // ('у нас  есть' в промпте → 'у нас есть' на вкладке) — иначе startsWith не сходится.
+  const normLabel = (x) => String(x || '').replace(/\s+/g, ' ').trim()
   function sessionForLabel(sessions, label) {
     if (!label) return null
-    const exact = sessions.find((s) => s.title === label)
-    if (exact) return exact
-    const pref = label.replace(/[…\s]+$/, '')
-    if (pref && pref !== label) return sessions.find((s) => s.title && s.title.startsWith(pref)) || null
+    const nl = normLabel(label)
+    const keysOf = (s) => [s.aiTitle, s.lastPrompt] // кандидаты имени вкладки
+    // 1) точное совпадение по любому кандидату (свежайшая первой — sessions отсортирован)
+    for (const s of sessions) {
+      for (const k of keysOf(s)) if (k && normLabel(k) === nl) return s
+    }
+    // 2) префиксный матч (tab.label усечён многоточием) по любому кандидату
+    const pref = normLabel(label.replace(/[…\s]+$/, ''))
+    if (pref && pref !== nl) {
+      for (const s of sessions) {
+        for (const k of keysOf(s)) if (k && normLabel(k).startsWith(pref)) return s
+      }
+    }
     return null
   }
 
