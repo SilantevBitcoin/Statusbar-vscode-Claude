@@ -6,8 +6,9 @@ const os = require('os')
 const path = require('path')
 
 const HOME = os.homedir()
-const PROJECTS = path.join(HOME, '.claude', 'projects')
-const SETTINGS = path.join(HOME, '.claude', 'settings.json')
+// env-override — только для тестов (подмена на фикстуры), в бою пусто
+const PROJECTS = process.env.CLAUDE_PROJECTS_DIR || path.join(HOME, '.claude', 'projects')
+const SETTINGS = process.env.CLAUDE_SETTINGS_FILE || path.join(HOME, '.claude', 'settings.json')
 
 // Кэш последнего ВАЛИДНОГО settings: Claude Code переписывает settings.json не атомарно
 // (бывает 0 байт при truncate до записи, наблюдалось 2026-07-10) — при пустом/битом файле
