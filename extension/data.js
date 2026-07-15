@@ -131,7 +131,10 @@ function readUsage(file) {
       } catch (_) {}
     }
     if (usage) return { ...usage, title, lastPrompt }
-    if (size <= span) return null // прочитали весь файл — usage там нет
+    // Прочитали весь файл, usage нет. Если промпт ЕСТЬ (чат создан, но ассистент ещё не
+    // ответил → нет message.usage) — это новый чат, контекст 0: возвращаем с tokens=0,
+    // чтобы сессия попала в список и её вкладка сматчилась (иначе выпадала → FALLBACK на чужую).
+    if (size <= span) return lastPrompt ? { tokens: 0, modelId: '', cwd: '', title, lastPrompt } : null
   }
   return null
 }
@@ -226,7 +229,12 @@ function listProjectSessions(workspacePath) {
         continue
       }
       const r = readUsageCached(fp, mtime)
-      if (r && belongs(r.cwd, want)) {
+      // Принадлежность проекту: папка хранения === munge(workspace) → сессия ТОЧНО этого
+      // проекта (Claude кладёт jsonl по cwd ЗАПУСКА, папка не меняется всю сессию). belongs
+      // по runtime-cwd для корня НЕ проверяем: cwd ДРЕЙФУЕТ (CC 2.1.209 пишет в поле cwd
+      // текущую bash-директорию — ложно отсекало активную сессию). Для подпапок (pdir=tag-*)
+      // belongs по cwd остаётся — иначе не различить personal-2.
+      if (r && (pl === tag || belongs(r.cwd, want))) {
         // aiTitle: хвост (свежайший) → голова (у части сессий пишется раз в начале).
         // Имя вкладки == aiTitle (сессии ≤2.1.205) ЛИБО последний промпт (2.1.206+) —
         // оба кладём в сессию, матчер вкладки (sessionForLabel) проверяет их вместе.

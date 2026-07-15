@@ -55,6 +55,23 @@ test('readSettings: битый файл не затирает последнее
   assertEq(readSettings(), { model: 'claude-fable-5[1m]', effortLevel: 'max' })
 })
 
+test('readUsage: новый чат (промпт есть, usage нет) → tokens=0, не null', () => {
+  const fp = path.join(TMP, 's3.jsonl')
+  fs.writeFileSync(fp, J({ type: 'last-prompt', lastPrompt: 'привет' }))
+  const r = readUsage(fp)
+  assertEq(r && r.tokens, 0)
+  assertEq(r && r.lastPrompt, 'привет')
+})
+
+test('listProjectSessions: дрейф cwd не выкидывает сессию своей munge-папки', () => {
+  const pdir = path.join(process.env.CLAUDE_PROJECTS_DIR, 'd--AI-proj2')
+  fs.mkdirSync(pdir, { recursive: true })
+  // cwd уехал в совсем другую папку (CC 2.1.209 пишет текущую bash-директорию)
+  fs.writeFileSync(path.join(pdir, 'a.jsonl'), usageRec(30, 'claude-opus-4-8', 'c:\\somewhere\\else'))
+  const ss = listProjectSessions('d:\\AI\\proj2')
+  assertEq(ss.length, 1)
+})
+
 test('listProjectSessions: munge-папка, belongs-фильтр, сортировка по mtime', () => {
   const pdir = path.join(process.env.CLAUDE_PROJECTS_DIR, 'd--AI-proj')
   fs.mkdirSync(pdir, { recursive: true })
