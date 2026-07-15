@@ -249,6 +249,17 @@ function listProjectSessions(workspacePath) {
   return out.sort((a, b) => b.mtime - a.mtime)
 }
 
+// Сессия по известному пути транскрипта: реестр (registry.js) даёт tp напрямую —
+// не нужны сканы папок projects (munge/регистр/дрейф cwd мимо). Кэш тот же (mtime).
+function sessionByPath(fp) {
+  let mtime
+  try { mtime = fs.statSync(fp).mtimeMs } catch (_) { return null }
+  const r = readUsageCached(fp, mtime)
+  if (!r) return null
+  const aiTitle = r.title || readTitleHead(fp)
+  return { fp, mtime, tokens: r.tokens, modelId: r.modelId, title: aiTitle || r.lastPrompt, aiTitle, lastPrompt: r.lastPrompt }
+}
+
 // Workflow/Task-активность: число свежих subagents/agent-*.jsonl (mtime внутри окна).
 // Сессия пишет суб-агентов в <stem>/subagents/agent-<id>.jsonl; Glob их не видит —
 // читаем через readdirSync. >0 → идёт оркестрация (workflow = пачка параллельно,
@@ -308,5 +319,5 @@ function composeLine(session) {
 
 module.exports = {
   readSettings, ctxWindow, normPath, belongs, munge, listJsonl, readUsage,
-  readTitleHead, subagentActivity, listProjectSessions, composeLine,
+  readTitleHead, subagentActivity, listProjectSessions, sessionByPath, composeLine,
 }

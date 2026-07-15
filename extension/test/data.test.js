@@ -72,6 +72,16 @@ test('listProjectSessions: дрейф cwd не выкидывает сессию
   assertEq(ss.length, 1)
 })
 
+test('sessionByPath: сессия по прямому пути (без сканов папок)', () => {
+  const { sessionByPath } = require('../data')
+  const fp = path.join(TMP, 's4.jsonl')
+  fs.writeFileSync(fp, usageRec(70, 'claude-fable-5', 'd:\\anywhere') + J({ type: 'last-prompt', lastPrompt: 'q' }))
+  const s = sessionByPath(fp)
+  assertEq(s.tokens, 70)
+  assertEq(s.modelId, 'claude-fable-5')
+  assertEq(sessionByPath(path.join(TMP, 'нет.jsonl')), null)
+})
+
 test('listProjectSessions: munge-папка, belongs-фильтр, сортировка по mtime', () => {
   const pdir = path.join(process.env.CLAUDE_PROJECTS_DIR, 'd--AI-proj')
   fs.mkdirSync(pdir, { recursive: true })

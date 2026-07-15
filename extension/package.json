@@ -2,7 +2,7 @@
   "name": "claude-ctx-hud",
   "displayName": "Claude Context HUD",
   "description": "Live status-bar HUD for Claude Code: per-tab context %, model, effort, workflow activity and 5h/7d subscription limits.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "SilantevBitcoin",
   "license": "MIT",
   "icon": "icon.png",
@@ -16,9 +16,17 @@
   "main": "./extension.js",
   "activationEvents": ["onStartupFinished"],
   "contributes": {
+    "commands": [
+      { "command": "claudeCtxHud.diagnose", "title": "Claude HUD: Diagnose" }
+    ],
     "configuration": {
       "title": "Claude Context HUD",
       "properties": {
+        "claudeCtxHud.markFallback": {
+          "type": "boolean",
+          "default": true,
+          "description": "Помечать строку маркером ≈, когда привязка к вкладке не точная (фолбэк LAST-ACTIVE/MRU)."
+        },
         "claudeCtxHud.padLeft": {
           "type": "number",
           "default": 50,
