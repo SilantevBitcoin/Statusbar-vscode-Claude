@@ -10,6 +10,7 @@ const { listProjectSessions, composeLine, sessionByPath } = require('./data')
 const { fetchUsage } = require('./usage')
 const { loadRegistry } = require('./registry')
 const { resolve, normLabel } = require('./resolve')
+const { diagLog, credentialsProbe, DIAG } = require('./diag')
 
 const DIR = path.join(os.homedir(), '.claude', 'ctx-hud')
 const LOG_FILE = path.join(DIR, 'ext-active.log')
@@ -98,6 +99,7 @@ function activate(context) {
       const t = claudeTabTitle()
       if (t) activeTitle = t // запоминаем активный чат; не сбрасываем на не-Claude вкладке
 
+      credentialsProbe() // сторож авторизации: ловим окно, в которое CC не читает токен
       const registry = loadRegistry()
       const sessions = listProjectSessions(workspacePath)
       const r = resolve({ label: activeTitle, registry, sessions, tabCache: _tabCache, ws: workspacePath })
@@ -114,6 +116,17 @@ function activate(context) {
       }
       if (lastUsage) d.rate_limits = lastUsage
       const uncertain = r.via === 'LAST-ACTIVE' || r.via === 'MRU' // фолбэк — честно помечаем
+      // Фолбэк = HUD показывает ЧУЖУЮ сессию (свежайшую), а не сессию этой вкладки.
+      // Логируем label от VS Code и размер реестра — по ним видно, ПОЧЕМУ матч не сошёлся.
+      diagLog(
+        'fallback',
+        uncertain ? r.via + '|' + normLabel(activeTitle) : 'ok',
+        uncertain
+          ? 'via=' + r.via + ' label=' + JSON.stringify(String(activeTitle || '').slice(0, 40)) +
+            ' → чужая fp=...' + (r.fp ? r.fp.slice(-16) : '-') +
+            ' | реестр=' + registry.size + ' сессий, скан=' + sessions.length + ', вкладок=' + allClaudeTabs().length
+          : null,
+      )
       item.text = lead + (markFallback && uncertain ? '≈ ' : '') + buildLine(d, { showLimits, showWorkflow })
       item.tooltip = 'via: ' + r.via + ' — ' + ((chosen && chosen.title) || 'сессия') + healthWarning(registry, sessions)
     } catch (_) {
@@ -142,9 +155,17 @@ function activate(context) {
     },
   })
   // Диагностика по требованию (вместо вечного tab-diag.log): полная цепочка привязки.
+  // Канал создаём ОДИН раз и переиспользуем: createOutputChannel на каждый вызов плодил
+  // по каналу за нажатие, и ни один из них не диспозился.
+  let diagChannel = null
   context.subscriptions.push(
     vscode.commands.registerCommand('claudeCtxHud.diagnose', () => {
-      const ch = vscode.window.createOutputChannel('Claude HUD')
+      if (!diagChannel) {
+        diagChannel = vscode.window.createOutputChannel('Claude HUD')
+        context.subscriptions.push(diagChannel)
+      }
+      const ch = diagChannel
+      ch.clear()
       try {
         const registry = loadRegistry()
         const sessions = listProjectSessions(workspacePath)
@@ -159,6 +180,14 @@ function activate(context) {
         }
         for (const s of sessions.slice(0, 8))
           ch.appendLine('sess ...' + s.fp.slice(-20) + ' tok=' + s.tokens + ' aiTitle=' + JSON.stringify(s.aiTitle) + ' lastPrompt=' + JSON.stringify((s.lastPrompt || '').slice(0, 40)))
+        // Хвост diag-лога: сюда падают только аномалии (фолбэк привязки, битый settings.json).
+        ch.appendLine('--- diag-лог: ' + DIAG)
+        try {
+          const tail = fs.readFileSync(DIAG, 'utf8').trim().split('\n').slice(-10)
+          for (const ln of tail) ch.appendLine(ln)
+        } catch (_) {
+          ch.appendLine('(пуст — аномалий не зафиксировано)')
+        }
       } catch (e) {
         ch.appendLine('diagnose error: ' + e.message)
       }

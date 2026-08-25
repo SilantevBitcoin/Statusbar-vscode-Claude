@@ -5,6 +5,12 @@ const path = require('path')
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'ctxhud-data-'))
 process.env.CLAUDE_PROJECTS_DIR = path.join(TMP, 'projects')
 process.env.CLAUDE_SETTINGS_FILE = path.join(TMP, 'settings.json')
+// ОБЯЗАТЕЛЬНО: иначе кейс с пустым settings пишет «size=0» в БОЕВОЙ ~/.claude/ctx-hud/diag.log —
+// ложная улика обнуления, которой потом верят при разборе инцидента. Задать ДО require('../data').
+process.env.CTX_HUD_DIR = TMP
+// Изоляция от боевого окружения: ANTHROPIC_MODEL у Egor задан глобально, а readSettings отдаёт
+// env приоритет над settings.json — без сброса он перекрыл бы фикстуры в тестах ниже.
+delete process.env.ANTHROPIC_MODEL
 fs.mkdirSync(process.env.CLAUDE_PROJECTS_DIR, { recursive: true })
 
 const { ctxWindow, normPath, belongs, munge, readUsage, readTitleHead, readSettings, listProjectSessions } = require('../data')
@@ -52,6 +58,17 @@ test('readSettings: битый файл не затирает последнее
   fs.writeFileSync(process.env.CLAUDE_SETTINGS_FILE, JSON.stringify({ model: 'claude-fable-5[1m]', effortLevel: 'max' }))
   assertEq(readSettings(), { model: 'claude-fable-5[1m]', effortLevel: 'max' })
   fs.writeFileSync(process.env.CLAUDE_SETTINGS_FILE, '')
+  assertEq(readSettings(), { model: 'claude-fable-5[1m]', effortLevel: 'max' })
+})
+
+test('readSettings: ANTHROPIC_MODEL перекрывает settings.model (иерархия Claude Code)', () => {
+  fs.writeFileSync(process.env.CLAUDE_SETTINGS_FILE, JSON.stringify({ model: 'claude-fable-5[1m]', effortLevel: 'max' }))
+  process.env.ANTHROPIC_MODEL = 'claude-opus-4-8[1m]'
+  assertEq(readSettings(), { model: 'claude-opus-4-8[1m]', effortLevel: 'max' })
+  // Ради чего правка: окно снова считается как 1M, хотя в транскрипте модель без суффикса [1m].
+  assertEq(ctxWindow(readSettings().model, 'claude-opus-4-8'), 1000000)
+  // Сняли переменную — источником снова становится settings.json.
+  delete process.env.ANTHROPIC_MODEL
   assertEq(readSettings(), { model: 'claude-fable-5[1m]', effortLevel: 'max' })
 })
 

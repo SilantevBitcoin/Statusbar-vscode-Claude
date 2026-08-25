@@ -4,6 +4,7 @@
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
+const { diagLog } = require('./diag')
 
 const HOME = os.homedir()
 // env-override — только для тестов (подмена на фикстуры), в бою пусто
@@ -19,10 +20,24 @@ function readSettings() {
   try {
     const s = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'))
     if (s.model || s.effortLevel) _lastSettings = { model: s.model || '', effortLevel: s.effortLevel || '' }
-  } catch (_) {
-    // битый/пустой JSON (транзиент перезаписи) — возвращаем последнее валидное
+    diagLog('settings', 'ok', null)
+  } catch (e) {
+    // битый/пустой JSON (транзиент перезаписи) — возвращаем последнее валидное.
+    // Размер обязателен: 0 байт = окно truncate, иное = битый JSON. Это единственное
+    // место, где обнуление конфига вообще наблюдаемо — раньше catch глотал молча.
+    let size = -1
+    try { size = fs.statSync(SETTINGS).size } catch (_) {}
+    diagLog('settings', 'bad:' + size, 'settings.json НЕЧИТАЕМ: size=' + size + ' байт | ' + e.message)
   }
-  return _lastSettings
+  // ANTHROPIC_MODEL перекрывает settings.model — та же иерархия, что у самого Claude Code
+  // (проверено 2026-07-20: при model=fable в settings и env=haiku отвечал haiku). Без этого HUD
+  // терял флаг [1m]: дефолт модели прибит переменной, а ключ model из settings исчезает при
+  // первом же переключении на «default» (CC делает delete ключа) — окно считалось 200К вместо
+  // 1M, проценты контекста врали впятеро (267951 токенов показывались как 134% вместо 27%).
+  // В транскрипте суффикс [1m] не пишется вообще, так что settings/env — единственный источник.
+  // env читаем на каждый вызов, а не в константу при импорте: так им управляют тесты.
+  const envModel = process.env.ANTHROPIC_MODEL || ''
+  return envModel ? { model: envModel, effortLevel: _lastSettings.effortLevel } : _lastSettings
 }
 
 // Окно контекста ДЛЯ СЕССИИ. Флаг [1m] в settings.model относится только к своей
@@ -91,15 +106,19 @@ function readUsage(file) {
   for (const span of TAIL_SPANS) {
     let buf
     let size
+    let fd = null
     try {
-      const fd = fs.openSync(file, 'r')
+      fd = fs.openSync(file, 'r')
       size = fs.fstatSync(fd).size
       const len = Math.min(size, span)
       buf = Buffer.alloc(len)
       fs.readSync(fd, buf, 0, len, size - len)
-      fs.closeSync(fd)
     } catch (_) {
       return null
+    } finally {
+      // closeSync именно в finally: раньше он стоял последней строкой try, и любое
+      // исключение в fstat/read уводило в catch МИМО закрытия — дескриптор утекал.
+      if (fd !== null) try { fs.closeSync(fd) } catch (_) {}
     }
     const lines = buf.toString('utf8').split('\n')
     let usage = null
@@ -127,7 +146,14 @@ function readUsage(file) {
             }
           }
         }
-        if (usage && lastPrompt) break // title (aiTitle) опционален: в 2.1.206 его нет
+        // Выходим, только собрав ВСЕ ТРИ. Раньше было `usage && lastPrompt` — «aiTitle
+        // опционален, в 2.1.206 его не пишут». Но в 2.1.210 ai-title ВЕРНУЛИ, а usage и
+        // last-prompt лежат у самого конца файла, тогда как ai-title — десятки КБ дальше:
+        // цикл (идёт с конца назад) обрывался ДО него → title=null → вкладка не находила
+        // свою сессию → FALLBACK на MRU/LAST-ACTIVE → HUD показывал ЧУЖИЕ цифры.
+        // Доказано 2026-07-17 на 8b7679b9: ai-title в 29 КБ от конца, HUD читал null.
+        // Цена полного прохода — один буфер хвоста (128К), он уже прочитан в память.
+        if (usage && lastPrompt && title) break
       } catch (_) {}
     }
     if (usage) return { ...usage, title, lastPrompt }
@@ -149,18 +175,30 @@ const _titleCache = new Map()
 function readTitleHead(file) {
   const c = _titleCache.get(file)
   if (c && (c.title !== null || c.scanned >= HEAD_SPAN)) return c.title
-  let buf
-  let scanned
+  // Размер берём statSync'ом, БЕЗ открытия файла: самая частая ветка ниже («не выросло»)
+  // данных не читает, и дескриптор ей не нужен. Раньше здесь стоял openSync+fstatSync, а
+  // ранний return уходил мимо closeSync — fd утекал на КАЖДОМ тике по каждой завершённой
+  // сессии (≈6 за тик), окно упиралось в лимит ~8192 за 2-5 ч, и тогда у Claude Code
+  // падало чтение settings.json → его catch писал поверх пустой конфиг. Это и была
+  // причина обнулений конфига, которые ловились с 10.07.2026 (доказано 20.07 репро-тестом).
+  let size
   try {
-    const fd = fs.openSync(file, 'r')
-    const size = fs.fstatSync(fd).size
-    if (c && c.title === null && size <= c.scanned) return null // не выросло — не перечитываем
-    scanned = Math.min(size, HEAD_SPAN)
-    buf = Buffer.alloc(scanned)
-    fs.readSync(fd, buf, 0, scanned, 0)
-    fs.closeSync(fd)
+    size = fs.statSync(file).size
   } catch (_) {
     return null
+  }
+  if (c && c.title === null && size <= c.scanned) return null // не выросло — не перечитываем
+  const scanned = Math.min(size, HEAD_SPAN)
+  let buf
+  let fd = null
+  try {
+    fd = fs.openSync(file, 'r')
+    buf = Buffer.alloc(scanned)
+    fs.readSync(fd, buf, 0, scanned, 0)
+  } catch (_) {
+    return null
+  } finally {
+    if (fd !== null) try { fs.closeSync(fd) } catch (_) {}
   }
   const lines = buf.toString('utf8').split('\n')
   let title = null
