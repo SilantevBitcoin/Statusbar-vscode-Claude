@@ -1,6 +1,5 @@
 # Claude Context HUD
 
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/SilantevBitcoin.claude-ctx-hud?label=VS%20Code%20Marketplace&color=1e1e1e)](https://marketplace.visualstudio.com/items?itemName=SilantevBitcoin.claude-ctx-hud)
 [![Open VSX](https://img.shields.io/open-vsx/v/SilantevBitcoin/claude-ctx-hud?label=Open%20VSX&color=D97757)](https://open-vsx.org/extension/SilantevBitcoin/claude-ctx-hud)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -55,18 +54,12 @@
 
 ## Установка
 
-### Из магазина (рекомендуется)
-
-**VS Code Marketplace** — в VS Code открой панель Extensions (`Ctrl/Cmd+Shift+X`), найди
-**«Claude Context HUD»** и нажми Install. Или из терминала:
-
-```bash
-code --install-extension SilantevBitcoin.claude-ctx-hud
-```
+### Из Open VSX (рекомендуется)
 
 **Open VSX** (Cursor / VSCodium / Windsurf) — найди **«Claude Context HUD»** во встроенном менеджере
-расширений, либо скачай `.vsix` со [страницы Open VSX](https://open-vsx.org/extension/SilantevBitcoin/claude-ctx-hud)
-и поставь через `Extensions: Install from VSIX…`.
+расширений. В VS Code скачай `.vsix` со [страницы Open VSX](https://open-vsx.org/extension/SilantevBitcoin/claude-ctx-hud)
+или из [релизов на GitHub](https://github.com/SilantevBitcoin/Statusbar-vscode-Claude/releases) и поставь
+через `Extensions: Install from VSIX…`.
 
 После установки индикатор появляется в нижней статус-полосе автоматически.
 
@@ -92,7 +85,7 @@ node install.js
 
 ### Удаление
 
-Из магазина — обычным Uninstall в панели Extensions. При ручной установке удали папку
+Установленное из `.vsix` или Open VSX — обычным Uninstall в панели Extensions. При ручной установке удали папку
 `~/.vscode/extensions/SilantevBitcoin.claude-ctx-hud-*/` (или `local.claude-ctx-hud-*/`) и соответствующую
 запись из `~/.vscode/extensions/extensions.json`, затем перезагрузи окно.
 
@@ -187,7 +180,7 @@ node -e 'const {buildLine}=require("./extension/format"); console.log(buildLine(
 
 ### 0.1.0
 
-Первый публичный релиз в VS Code Marketplace и Open VSX.
+Первый публичный релиз в Open VSX.
 
 - Иконка расширения.
 - Убран рудиментарный ручной тумблер `ultracode` (`EH+W`): активность оркестрации и так видна
