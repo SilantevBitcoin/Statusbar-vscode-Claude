@@ -8,7 +8,9 @@ Thumbs.db
 # личные файлы памяти/инструкций — не публикуем
 MEMORY.md
 CLAUDE.md
+plans/
 
 # эфемерные копии для сборки .vsix (источник правды — корневые README.md/LICENSE)
 extension/README.md
 extension/LICENSE
+_archive/

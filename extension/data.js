@@ -13,8 +13,7 @@ const SETTINGS = process.env.CLAUDE_SETTINGS_FILE || path.join(HOME, '.claude', 
 
 // Кэш последнего ВАЛИДНОГО settings: Claude Code переписывает settings.json не атомарно
 // (бывает 0 байт при truncate до записи, наблюдалось 2026-07-10) — при пустом/битом файле
-// держим последнее известное model/effort, иначе окно контекста ложно падало на 200К и в
-// строке пропадал effort. Пустой валидный (нет полей) не затирает кэш нулём.
+// держим последнее известное model/effort, иначе в строке пропадал effort. Пустой валидный (нет полей) не затирает кэш нулём.
 let _lastSettings = { model: '', effortLevel: '' }
 function readSettings() {
   try {
@@ -30,28 +29,18 @@ function readSettings() {
     diagLog('settings', 'bad:' + size, 'settings.json НЕЧИТАЕМ: size=' + size + ' байт | ' + e.message)
   }
   // ANTHROPIC_MODEL перекрывает settings.model — та же иерархия, что у самого Claude Code
-  // (проверено 2026-07-20: при model=fable в settings и env=haiku отвечал haiku). Без этого HUD
-  // терял флаг [1m]: дефолт модели прибит переменной, а ключ model из settings исчезает при
-  // первом же переключении на «default» (CC делает delete ключа) — окно считалось 200К вместо
-  // 1M, проценты контекста врали впятеро (267951 токенов показывались как 134% вместо 27%).
-  // В транскрипте суффикс [1m] не пишется вообще, так что settings/env — единственный источник.
+  // (проверено 2026-07-20: при model=fable в settings и env=haiku отвечал haiku).
   // env читаем на каждый вызов, а не в константу при импорте: так им управляют тесты.
   const envModel = process.env.ANTHROPIC_MODEL || ''
   return envModel ? { model: envModel, effortLevel: _lastSettings.effortLevel } : _lastSettings
 }
 
-// Окно контекста ДЛЯ СЕССИИ. Флаг [1m] в settings.model относится только к своей
-// модели: сессия может идти на другой (выбор /model session-only, в settings не
-// пишется) — тогда чужой флаг не применяем. Fable/Mythos: 1M всегда (дефолт API).
-function ctxWindow(settingsModel, sessionModelId) {
-  const m = String(settingsModel || '')
-  const id = String(sessionModelId || '')
-  if (/fable|mythos/i.test(id)) return 1000000
-  const has1m = /1m|\[1m\]/i.test(m)
-  if (!id) return has1m ? 1000000 : 200000 // модель сессии неизвестна → по settings
-  const base = m.replace(/\[1m\]/gi, '').trim().toLowerCase()
-  if (has1m && base && id.toLowerCase().includes(base)) return 1000000
-  return 200000
+// Окно контекста: всегда 1M. Раньше окно выводилось из флага [1m] в settings.model, но
+// CC удаляет ключ model при выборе «default» в /model — и окно молча падало на 200К, проценты
+// врали впятеро (2026-09-29: 516k на Opus 5.5 показывались как 258%). Все модели, на которых
+// работаем, идут с 1M; аргументы оставлены ради совместимости вызовов.
+function ctxWindow(_settingsModel, _sessionModelId) {
+  return 1000000
 }
 
 // Нормализация пути для сравнения cwd: нижний регистр, слеши → бэкслеши.

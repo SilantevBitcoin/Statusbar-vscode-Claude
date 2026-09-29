@@ -19,11 +19,11 @@ const J = (o) => JSON.stringify(o) + '\n'
 const usageRec = (tokens, model, cwd) =>
   J({ cwd, message: { model, usage: { input_tokens: tokens, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } } })
 
-test('ctxWindow: fable→1M всегда; [1m] только для своей модели; иначе 200К', () => {
-  assertEq(ctxWindow('claude-opus-4-8[1m]', 'claude-fable-5'), 1000000)
-  assertEq(ctxWindow('claude-opus-4-8[1m]', 'claude-opus-4-8'), 1000000)
-  assertEq(ctxWindow('claude-opus-4-8[1m]', 'claude-sonnet-5'), 200000)
-  assertEq(ctxWindow('claude-opus-4-8', 'claude-opus-4-8'), 200000)
+test('ctxWindow: всегда 1M, независимо от settings и модели сессии', () => {
+  assertEq(ctxWindow('', 'claude-opus-5-5'), 1000000) // ключа model нет в settings — кейс 2026-09-29
+  assertEq(ctxWindow('', ''), 1000000)
+  assertEq(ctxWindow('claude-opus-4-8', 'claude-opus-4-8'), 1000000)
+  assertEq(ctxWindow('claude-opus-4-8[1m]', 'claude-sonnet-5'), 1000000)
 })
 
 test('normPath/belongs/munge', () => {
@@ -65,8 +65,6 @@ test('readSettings: ANTHROPIC_MODEL перекрывает settings.model (ие�
   fs.writeFileSync(process.env.CLAUDE_SETTINGS_FILE, JSON.stringify({ model: 'claude-fable-5[1m]', effortLevel: 'max' }))
   process.env.ANTHROPIC_MODEL = 'claude-opus-4-8[1m]'
   assertEq(readSettings(), { model: 'claude-opus-4-8[1m]', effortLevel: 'max' })
-  // Ради чего правка: окно снова считается как 1M, хотя в транскрипте модель без суффикса [1m].
-  assertEq(ctxWindow(readSettings().model, 'claude-opus-4-8'), 1000000)
   // Сняли переменную — источником снова становится settings.json.
   delete process.env.ANTHROPIC_MODEL
   assertEq(readSettings(), { model: 'claude-fable-5[1m]', effortLevel: 'max' })
